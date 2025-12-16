@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1a1625">
+  <title>Chrysalis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    :root {
+      --bg-deep: #1a1625; --bg-card: #252131; --bg-elevated: #2d2839; --bg-input: #1f1b2a;
+      --text-primary: #f4f0f7; --text-secondary: #a89fb5; --text-muted: #6b6279;
+      --accent-primary: #c9a0dc; --accent-secondary: #8ecae6; --accent-warm: #f4a261; --accent-success: #90be6d;
+      --border-subtle: rgba(201, 160, 220, 0.15);
+      --radius-sm: 8px; --radius-md: 12px; --radius-lg: 20px; --radius-xl: 28px;
+      --font-display: 'Fraunces', Georgia, serif; --font-body: 'DM Sans', sans-serif;
+      --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body, #root { height: 100%; overflow: hidden; }
+    body { font-family: var(--font-body); background: var(--bg-deep); color: var(--text-primary); line-height: 1.5; -webkit-font-smoothing: antialiased; }
+    input, textarea, button, select { font-family: inherit; font-size: inherit; }
+    button { cursor: pointer; border: none; background: none; color: inherit; }
+    input, textarea { border: none; outline: none; background: none; }
+    ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 4px; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn 0.3s ease-out; } .slide-up { animation: slideUp 0.4s ease-out; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+    const generateId = () => Math.random().toString(36).substr(2, 9);
+    const formatDate = (d) => new Date(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    const formatDateFull = (d) => new Date(d).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    const formatDateShort = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const getDaysBetween = (d1, d2) => Math.ceil(Math.abs(new Date(d2) - new Date(d1)) / 864e5);
+    const getDateKey = (d) => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`; };
+    const isSameDay = (d1, d2) => getDateKey(d1) === getDateKey(d2);
+
+    const STORAGE_KEY = 'chrysalis_data', PIN_KEY = 'chrysalis_pin';
+    const loadData = () => { try { const s = localStorage.getItem(STORAGE_KEY); if (s) return JSON.parse(s); } catch {} return { photos: [], journals: [], medications: [], medLogs: [], milestones: [], categories: ['Face', 'Body', 'Hair', 'Other'], moods: [], settings: {} }; };
+    const saveData = (d) => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(d)); } catch {} };
+
+    const Icons = {
+      Calendar: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
+      Camera: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>,
+      Pill: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.5 20.5L3.5 13.5a4.95 4.95 0 1 1 7-7l7 7a4.95 4.95 0 0 1-7 7z"/><line x1="8.5" y1="8.5" x2="15.5" y2="15.5"/></svg>,
+      Star: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
+      Settings: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.604.852.997 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>,
+      Plus: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+      X: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+      ChevronLeft: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>,
+      ChevronRight: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>,
+      Image: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>,
+      Compare: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="8" height="18" rx="1"/><rect x="14" y="3" width="8" height="18" rx="1"/></svg>,
+      Lock: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
+      Trash: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+      Check: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>,
+      Download: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+    };
+
+    const MOODS = [{ emoji: '✨', label: 'Amazing', color: '#c9a0dc' }, { emoji: '😊', label: 'Good', color: '#90be6d' }, { emoji: '😐', label: 'Okay', color: '#f4a261' }, { emoji: '😔', label: 'Low', color: '#8ecae6' }, { emoji: '😢', label: 'Difficult', color: '#e76f51' }];
+
+    const StealthMode = ({ onExit }) => {
+      const [time, setTime] = useState(new Date());
+      useEffect(() => { const i = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(i); }, []);
+      const trains = [{ line: 'Blue Line', dest: 'Downtown', time: '3 min' }, { line: 'Red Line', dest: 'Airport', time: '7 min' }, { line: 'Green Line', dest: 'University', time: '12 min' }];
+      return (
+        <div style={{ height: '100%', background: '#1a1a2e', padding: 20, paddingTop: 'calc(20px + var(--safe-top))' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 }}>
+            <div><div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>METRO TRANSIT</div><div style={{ fontSize: 28, fontWeight: 600 }}>{time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div></div>
+            <button onClick={onExit} style={{ padding: '8px 16px', background: '#2a2a4a', borderRadius: 8, fontSize: 14 }}>Refresh</button>
+          </div>
+          <div style={{ fontSize: 12, color: '#666', marginBottom: 12 }}>UPCOMING DEPARTURES</div>
+          {trains.map((t, i) => <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: 16, background: '#2a2a4a', borderRadius: 8, marginBottom: 8 }}><div><div style={{ fontWeight: 500 }}>{t.line}</div><div style={{ fontSize: 13, color: '#888' }}>{t.dest}</div></div><div style={{ fontSize: 18, fontWeight: 600, color: i === 0 ? '#4ade80' : '#fff' }}>{t.time}</div></div>)}
+          <div style={{ fontSize: 11, color: '#555', textAlign: 'center', marginTop: 40 }}>Triple-tap refresh to access app</div>
+        </div>
+      );
+    };
+
+    const PinLock = ({ onUnlock, isSetup, onSetupComplete }) => {
+      const [pin, setPin] = useState('');
+      const [confirmPin, setConfirmPin] = useState('');
+      const [step, setStep] = useState(isSetup ? 'create' : 'enter');
+      const [error, setError] = useState('');
+      const handleDigit = (d) => {
+        if (step === 'create' && pin.length < 4) { const n = pin + d; setPin(n); if (n.length === 4) setTimeout(() => setStep('confirm'), 300); }
+        else if (step === 'confirm' && confirmPin.length < 4) { const n = confirmPin + d; setConfirmPin(n); if (n.length === 4) { if (n === pin) { localStorage.setItem(PIN_KEY, pin); onSetupComplete(); } else { setError('PINs do not match'); setTimeout(() => { setPin(''); setConfirmPin(''); setStep('create'); setError(''); }, 1500); } } }
+        else if (step === 'enter' && pin.length < 4) { const n = pin + d; setPin(n); if (n.length === 4) { if (n === localStorage.getItem(PIN_KEY)) onUnlock(); else { setError('Incorrect PIN'); setTimeout(() => { setPin(''); setError(''); }, 1000); } } }
+      };
+      const curr = step === 'confirm' ? confirmPin : pin;
+      return (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20, background: 'linear-gradient(180deg, var(--bg-deep), #1f1a2e)' }}>
+          <div style={{ fontSize: 48, marginBottom: 20 }}>🦋</div>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 400, marginBottom: 8 }}>{step === 'create' ? 'Create PIN' : step === 'confirm' ? 'Confirm PIN' : 'Welcome Back'}</h2>
+          <p style={{ color: error ? '#e76f51' : 'var(--text-secondary)', fontSize: 14, marginBottom: 40, height: 20 }}>{error || (step === 'enter' ? 'Enter your PIN' : 'Choose a 4-digit PIN')}</p>
+          <div style={{ display: 'flex', gap: 16, marginBottom: 48 }}>{[0,1,2,3].map(i => <div key={i} style={{ width: 16, height: 16, borderRadius: '50%', background: i < curr.length ? 'var(--accent-primary)' : 'var(--bg-elevated)' }} />)}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, maxWidth: 280 }}>
+            {[1,2,3,4,5,6,7,8,9,'',0,'⌫'].map((d, i) => <button key={i} onClick={() => d === '⌫' ? (step === 'confirm' ? setConfirmPin(p => p.slice(0,-1)) : setPin(p => p.slice(0,-1))) : d !== '' && handleDigit(String(d))} style={{ width: 72, height: 72, borderRadius: '50%', background: d === '' ? 'transparent' : 'var(--bg-elevated)', fontSize: d === '⌫' ? 20 : 28, fontWeight: 300, opacity: d === '' ? 0 : 1 }}>{d}</button>)}
+          </div>
+        </div>
+      );
+    };
+
+    const Modal = ({ isOpen, onClose, title, children }) => !isOpen ? null : (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 1000 }} onClick={onClose}>
+        <div style={{ width: '100%', maxWidth: 500, maxHeight: '90vh', background: 'var(--bg-card)', borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0', overflow: 'hidden', animation: 'slideUp 0.3s ease-out' }} onClick={e => e.stopPropagation()}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 24px', borderBottom: '1px solid var(--border-subtle)' }}><h3 style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500 }}>{title}</h3><button onClick={onClose} style={{ opacity: 0.6 }}><Icons.X /></button></div>
+          <div style={{ padding: 24, maxHeight: 'calc(90vh - 70px)', overflowY: 'auto' }}>{children}</div>
+        </div>
+      </div>
+    );
+
+    const CalendarView = ({ data, onDateSelect }) => {
+      const [month, setMonth] = useState(new Date());
+      const getDays = (d) => { const y = d.getFullYear(), m = d.getMonth(), first = new Date(y, m, 1), last = new Date(y, m + 1, 0), days = []; for (let i = 0; i < first.getDay(); i++) days.push(null); for (let i = 1; i <= last.getDate(); i++) days.push(new Date(y, m, i)); return days; };
+      const getData = (d) => { if (!d) return {}; const k = getDateKey(d); return { photos: data.photos.filter(p => getDateKey(p.date) === k).length, journals: data.journals.filter(j => getDateKey(j.date) === k).length, meds: data.medLogs.filter(m => getDateKey(m.date) === k).length }; };
+      const days = getDays(month), today = new Date();
+      return (
+        <div className="fade-in">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+            <button onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1))} style={{ padding: 8 }}><Icons.ChevronLeft /></button>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500 }}>{month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h2>
+            <button onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1))} style={{ padding: 8 }}><Icons.ChevronRight /></button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 8 }}>{['S','M','T','W','T','F','S'].map((d, i) => <div key={i} style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', padding: '8px 0' }}>{d}</div>)}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+            {days.map((d, i) => { if (!d) return <div key={i} />; const dd = getData(d), isToday = isSameDay(d, today), hasData = dd.photos || dd.journals || dd.meds;
+              return <button key={i} onClick={() => onDateSelect(d)} style={{ aspectRatio: '1', borderRadius: 'var(--radius-sm)', background: isToday ? 'var(--bg-elevated)' : 'transparent', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontSize: 14, fontWeight: isToday ? 600 : 400 }}>{d.getDate()}</span>
+                {hasData && <div style={{ display: 'flex', gap: 2, marginTop: 2 }}>{dd.photos > 0 && <div style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--accent-secondary)' }} />}{dd.journals > 0 && <div style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--accent-warm)' }} />}{dd.meds > 0 && <div style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--accent-success)' }} />}</div>}
+              </button>;
+            })}
+          </div>
+          <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 20, fontSize: 12, color: 'var(--text-muted)' }}><span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent-secondary)' }} /> Photos</span><span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent-warm)' }} /> Journal</span><span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent-success)' }} /> Meds</span></div>
+        </div>
+      );
+    };
+
+    const DayDetail = ({ date, data, setData, onClose }) => {
+      const dk = getDateKey(date), dayPhotos = data.photos.filter(p => getDateKey(p.date) === dk), dayJournals = data.journals.filter(j => getDateKey(j.date) === dk), dayMeds = data.medLogs.filter(m => getDateKey(m.date) === dk), dayMood = data.moods.find(m => getDateKey(m.date) === dk);
+      const [journalText, setJournalText] = useState('');
+      const [selectedMood, setSelectedMood] = useState(dayMood);
+      const addJournal = () => { if (!journalText.trim()) return; setData(p => ({ ...p, journals: [...p.journals, { id: generateId(), date: date.toISOString(), text: journalText }] })); setJournalText(''); };
+      const selectMood = (m) => { const nm = { ...m, date: date.toISOString() }; setSelectedMood(nm); setData(p => ({ ...p, moods: [...p.moods.filter(x => getDateKey(x.date) !== dk), nm] })); };
+      return (
+        <div className="slide-up">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}><button onClick={onClose} style={{ opacity: 0.6 }}><Icons.ChevronLeft /></button><h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 500 }}>{formatDateFull(date)}</h2></div>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', padding: 20, marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>HOW ARE YOU FEELING?</div>
+            <div style={{ display: 'flex', justifyContent: 'space-around' }}>{MOODS.map((m, i) => <button key={i} onClick={() => selectMood(m)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: 8, borderRadius: 'var(--radius-md)', background: selectedMood?.emoji === m.emoji ? `${m.color}20` : 'transparent' }}><span style={{ fontSize: 28 }}>{m.emoji}</span><span style={{ fontSize: 10, color: selectedMood?.emoji === m.emoji ? m.color : 'var(--text-muted)' }}>{m.label}</span></button>)}</div>
+          </div>
+          {dayPhotos.length > 0 && <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', padding: 20, marginBottom: 16 }}><div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>PHOTOS</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>{dayPhotos.map(p => <div key={p.id} style={{ aspectRatio: '1', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}><img src={p.data} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></div>)}</div></div>}
+          <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', padding: 20, marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>JOURNAL</div>
+            {dayJournals.map(j => <div key={j.id} style={{ padding: 12, background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', marginBottom: 8, fontSize: 14, lineHeight: 1.6 }}>{j.text}</div>)}
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}><textarea value={journalText} onChange={e => setJournalText(e.target.value)} placeholder="Write something..." style={{ flex: 1, background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', padding: 12, fontSize: 14, resize: 'none', minHeight: 60, color: 'var(--text-primary)' }} /><button onClick={addJournal} style={{ width: 44, background: 'var(--accent-primary)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--bg-deep)' }}><Icons.Plus /></button></div>
+          </div>
+          {dayMeds.length > 0 && <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', padding: 20 }}><div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>MEDICATIONS</div>{dayMeds.map(l => { const m = data.medications.find(x => x.id === l.medicationId); return <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', marginBottom: 8 }}><div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--accent-success)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--bg-deep)' }}><Icons.Check /></div><div><div style={{ fontWeight: 500 }}>{m?.name || 'Unknown'}</div><div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{l.dose}{l.site && ` • ${l.site}`}</div></div></div>; })}</div>}
+        </div>
+      );
+    };
+
+    const PhotosTab = ({ data, setData }) => {
+      const [cat, setCat] = useState('All');
+      const [showCamera, setShowCamera] = useState(false);
+      const [showCompare, setShowCompare] = useState(false);
+      const [compare, setCompare] = useState([null, null]);
+      const [viewing, setViewing] = useState(null);
+      const [showAddCat, setShowAddCat] = useState(false);
+      const [newCat, setNewCat] = useState('');
+      const [camCat, setCamCat] = useState('Face');
+      const [ghost, setGhost] = useState(null);
+      const [stream, setStream] = useState(null);
+      const fileRef = useRef(null), vidRef = useRef(null);
+      const cats = ['All', ...data.categories];
+      const photos = (cat === 'All' ? data.photos : data.photos.filter(p => p.category === cat)).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+      const startCam = async () => { try { const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 1280, height: 1280 } }); setStream(s); setShowCamera(true); const cp = data.photos.filter(p => p.category === camCat); if (cp.length) setGhost(cp.sort((a, b) => new Date(b.date) - new Date(a.date))[0].data); } catch { alert('Camera access denied'); } };
+      useEffect(() => { if (stream && vidRef.current) vidRef.current.srcObject = stream; }, [stream, showCamera]);
+      const stopCam = () => { if (stream) stream.getTracks().forEach(t => t.stop()); setStream(null); setShowCamera(false); setGhost(null); };
+      const capture = () => { if (!vidRef.current) return; const c = document.createElement('canvas'); c.width = vidRef.current.videoWidth; c.height = vidRef.current.videoHeight; c.getContext('2d').drawImage(vidRef.current, 0, 0); setData(p => ({ ...p, photos: [...p.photos, { id: generateId(), data: c.toDataURL('image/jpeg', 0.8), category: camCat, date: new Date().toISOString() }] })); stopCam(); };
+      const handleFile = (e) => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = (ev) => setData(p => ({ ...p, photos: [...p.photos, { id: generateId(), data: ev.target.result, category: cat === 'All' ? 'Other' : cat, date: new Date().toISOString() }] })); r.readAsDataURL(f); };
+      const addCat = () => { if (!newCat.trim() || data.categories.includes(newCat.trim())) return; setData(p => ({ ...p, categories: [...p.categories, newCat.trim()] })); setNewCat(''); setShowAddCat(false); };
+
+      return (
+        <div className="fade-in">
+          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 16, marginBottom: 16 }}>{cats.map(c => <button key={c} onClick={() => setCat(c)} style={{ padding: '8px 16px', borderRadius: 20, background: cat === c ? 'var(--accent-primary)' : 'var(--bg-card)', color: cat === c ? 'var(--bg-deep)' : 'var(--text-primary)', fontSize: 14, fontWeight: 500, whiteSpace: 'nowrap' }}>{c}</button>)}<button onClick={() => setShowAddCat(true)} style={{ padding: '8px 16px', borderRadius: 20, background: 'var(--bg-card)', border: '1px dashed var(--border-subtle)', fontSize: 14, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>+ Add</button></div>
+          <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}><button onClick={startCam} style={{ flex: 1, padding: '14px 20px', background: 'var(--accent-primary)', borderRadius: 'var(--radius-md)', color: 'var(--bg-deep)', fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><Icons.Camera /> Take Photo</button><button onClick={() => fileRef.current?.click()} style={{ padding: '14px 20px', background: 'var(--bg-card)', borderRadius: 'var(--radius-md)' }}><Icons.Image /></button><button onClick={() => setShowCompare(true)} style={{ padding: '14px 20px', background: 'var(--bg-card)', borderRadius: 'var(--radius-md)' }}><Icons.Compare /></button><input ref={fileRef} type="file" accept="image/*" onChange={handleFile} style={{ display: 'none' }} /></div>
+          {photos.length === 0 ? <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-muted)' }}><div style={{ fontSize: 48, marginBottom: 16 }}>📸</div><p>No photos yet</p></div> : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>{photos.map(p => <button key={p.id} onClick={() => setViewing(p)} style={{ aspectRatio: '1', borderRadius: 'var(--radius-sm)', overflow: 'hidden', position: 'relative' }}><img src={p.data} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /><div style={{ position: 'absolute', bottom: 4, left: 4, padding: '2px 6px', background: 'rgba(0,0,0,0.6)', borderRadius: 4, fontSize: 10 }}>{formatDateShort(p.date)}</div></button>)}</div>}
+          {showCamera && <div style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 1000, display: 'flex', flexDirection: 'column' }}><div style={{ flex: 1, position: 'relative' }}><video ref={vidRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />{ghost && <img src={ghost} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.3, pointerEvents: 'none' }} />}</div><div style={{ padding: 20, paddingBottom: 'calc(20px + var(--safe-bottom))', background: 'var(--bg-deep)' }}><div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 20, flexWrap: 'wrap' }}>{data.categories.map(c => <button key={c} onClick={() => { setCamCat(c); const cp = data.photos.filter(p => p.category === c); setGhost(cp.length ? cp.sort((a, b) => new Date(b.date) - new Date(a.date))[0].data : null); }} style={{ padding: '6px 14px', borderRadius: 16, background: camCat === c ? 'var(--accent-primary)' : 'var(--bg-card)', color: camCat === c ? 'var(--bg-deep)' : 'var(--text-primary)', fontSize: 13 }}>{c}</button>)}</div><div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around' }}><button onClick={stopCam} style={{ padding: 12 }}><Icons.X /></button><button onClick={capture} style={{ width: 72, height: 72, borderRadius: '50%', background: 'var(--accent-primary)', border: '4px solid var(--text-primary)' }} /><button onClick={() => setGhost(null)} style={{ padding: 12, opacity: ghost ? 1 : 0.3 }}>👻</button></div></div></div>}
+          <Modal isOpen={!!viewing} onClose={() => setViewing(null)} title={viewing?.category}>{viewing && <div><img src={viewing.data} style={{ width: '100%', borderRadius: 'var(--radius-md)', marginBottom: 16 }} /><p style={{ color: 'var(--text-muted)', marginBottom: 16 }}>{formatDateFull(viewing.date)}</p><button onClick={() => { if (confirm('Delete?')) { setData(p => ({ ...p, photos: p.photos.filter(x => x.id !== viewing.id) })); setViewing(null); } }} style={{ width: '100%', padding: 12, background: 'rgba(231,111,81,0.2)', borderRadius: 'var(--radius-md)', color: '#e76f51', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><Icons.Trash /> Delete</button></div>}</Modal>
+          <Modal isOpen={showCompare} onClose={() => { setShowCompare(false); setCompare([null, null]); }} title="Compare">{<div><div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>{[0, 1].map(i => <div key={i} style={{ flex: 1 }}><div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>{i ? 'AFTER' : 'BEFORE'}</div>{compare[i] ? <div style={{ position: 'relative' }}><img src={compare[i].data} style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 'var(--radius-md)' }} /><div style={{ position: 'absolute', bottom: 8, left: 8, padding: '4px 8px', background: 'rgba(0,0,0,0.7)', borderRadius: 4, fontSize: 11 }}>{formatDateShort(compare[i].date)}</div><button onClick={() => { const n = [...compare]; n[i] = null; setCompare(n); }} style={{ position: 'absolute', top: 4, right: 4, width: 24, height: 24, borderRadius: '50%', background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icons.X /></button></div> : <div style={{ aspectRatio: '1', background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 14 }}>Tap below</div>}</div>)}</div><div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>SELECT PHOTOS</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4, maxHeight: 200, overflowY: 'auto' }}>{photos.map(p => <button key={p.id} onClick={() => { const i = compare.findIndex(x => !x); if (i >= 0) { const n = [...compare]; n[i] = p; setCompare(n); } }} style={{ aspectRatio: '1', borderRadius: 4, overflow: 'hidden', opacity: compare.some(x => x?.id === p.id) ? 0.4 : 1 }}><img src={p.data} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /></button>)}</div></div>}</Modal>
+          <Modal isOpen={showAddCat} onClose={() => setShowAddCat(false)} title="Add Category"><input type="text" value={newCat} onChange={e => setNewCat(e.target.value)} placeholder="Category name..." style={{ width: '100%', padding: 14, background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', marginBottom: 16, color: 'var(--text-primary)' }} /><button onClick={addCat} style={{ width: '100%', padding: 14, background: 'var(--accent-primary)', borderRadius: 'var(--radius-md)', color: 'var(--bg-deep)', fontWeight: 500 }}>Add Category</button></Modal>
+        </div>
+      );
+    };
+
+    const MedsTab = ({ data, setData }) => {
+      const [showAdd, setShowAdd] = useState(false);
+      const [showLog, setShowLog] = useState(false);
+      const [selMed, setSelMed] = useState(null);
+      const [newMed, setNewMed] = useState({ name: '', type: 'injection', dose: '', frequency: '' });
+      const [log, setLog] = useState({ dose: '', site: '', notes: '' });
+      const sites = ['Left Thigh', 'Right Thigh', 'Left Glute', 'Right Glute', 'Left Deltoid', 'Right Deltoid', 'Abdomen'];
+      const getLast = (id) => { const l = data.medLogs.filter(x => x.medicationId === id); return l.length ? l.sort((a, b) => new Date(b.date) - new Date(a.date))[0] : null; };
+      const getLastSite = (id) => { const l = data.medLogs.filter(x => x.medicationId === id && x.site); return l.length ? l.sort((a, b) => new Date(b.date) - new Date(a.date))[0]?.site : null; };
+      const getSuggested = (id) => { const ls = getLastSite(id); if (!ls) return sites[0]; return sites[(sites.indexOf(ls) + 1) % sites.length]; };
+      const addMed = () => { if (!newMed.name.trim()) return; setData(p => ({ ...p, medications: [...p.medications, { id: generateId(), ...newMed }] })); setNewMed({ name: '', type: 'injection', dose: '', frequency: '' }); setShowAdd(false); };
+      const logDose = () => { if (!selMed) return; setData(p => ({ ...p, medLogs: [...p.medLogs, { id: generateId(), medicationId: selMed.id, dose: log.dose || selMed.dose, site: log.site, notes: log.notes, date: new Date().toISOString() }] })); setLog({ dose: '', site: '', notes: '' }); setShowLog(false); setSelMed(null); };
+      return (
+        <div className="fade-in">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}><h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500 }}>Medications</h2><button onClick={() => setShowAdd(true)} style={{ padding: '10px 16px', background: 'var(--accent-primary)', borderRadius: 'var(--radius-md)', color: 'var(--bg-deep)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6, fontSize: 14 }}><Icons.Plus /> Add</button></div>
+          {data.medications.length === 0 ? <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-muted)' }}><div style={{ fontSize: 48, marginBottom: 16 }}>💊</div><p>No medications yet</p></div> : <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{data.medications.map(m => { const last = getLast(m.id), days = last ? getDaysBetween(last.date, new Date()) : null; return <div key={m.id} style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', padding: 20 }}><div style={{ marginBottom: 12 }}><h3 style={{ fontSize: 18, fontWeight: 500, marginBottom: 4 }}>{m.name}</h3><p style={{ fontSize: 13, color: 'var(--text-muted)' }}>{m.type} • {m.dose} • {m.frequency}</p></div>{last && <div style={{ padding: 12, background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', marginBottom: 12, fontSize: 13 }}><div style={{ color: 'var(--text-muted)', marginBottom: 4 }}>Last dose</div><div>{formatDate(last.date)} ({days === 0 ? 'Today' : `${days} day${days > 1 ? 's' : ''} ago`})</div>{last.site && <div style={{ color: 'var(--text-muted)', marginTop: 4 }}>Site: {last.site}</div>}</div>}<button onClick={() => { setSelMed(m); setLog({ dose: m.dose, site: m.type === 'injection' ? getSuggested(m.id) : '', notes: '' }); setShowLog(true); }} style={{ width: '100%', padding: 12, background: 'var(--accent-success)', borderRadius: 'var(--radius-md)', color: 'var(--bg-deep)', fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><Icons.Check /> Log Dose</button></div>; })}</div>}
+          <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} title="Add Medication"><div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}><div><label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>NAME</label><input type="text" value={newMed.name} onChange={e => setNewMed({ ...newMed, name: e.target.value })} placeholder="e.g., Estradiol" style={{ width: '100%', padding: 14, background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)' }} /></div><div><label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>TYPE</label><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{['injection', 'patch', 'pill', 'gel', 'other'].map(t => <button key={t} onClick={() => setNewMed({ ...newMed, type: t })} style={{ padding: '8px 14px', borderRadius: 'var(--radius-md)', background: newMed.type === t ? 'var(--accent-primary)' : 'var(--bg-input)', color: newMed.type === t ? 'var(--bg-deep)' : 'var(--text-primary)', fontSize: 13, textTransform: 'capitalize' }}>{t}</button>)}</div></div><div><label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>DOSE</label><input type="text" value={newMed.dose} onChange={e => setNewMed({ ...newMed, dose: e.target.value })} placeholder="e.g., 5mg" style={{ width: '100%', padding: 14, background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)' }} /></div><div><label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>FREQUENCY</label><input type="text" value={newMed.frequency} onChange={e => setNewMed({ ...newMed, frequency: e.target.value })} placeholder="e.g., Weekly" style={{ width: '100%', padding: 14, background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)' }} /></div><button onClick={addMed} style={{ width: '100%', padding: 14, background: 'var(--accent-primary)', borderRadius: 'var(--radius-md)', color: 'var(--bg-deep)', fontWeight: 500, marginTop: 8 }}>Add Medication</button></div></Modal>
+          <Modal isOpen={showLog} onClose={() => { setShowLog(false); setSelMed(null); }} title={`Log ${selMed?.name || ''}`}><div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}><div><label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>DOSE</label><input type="text" value={log.dose} onChange={e => setLog({ ...log, dose: e.target.value })} style={{ width: '100%', padding: 14, background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)' }} /></div>{selMed?.type === 'injection' && <div><label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>INJECTION SITE {getLastSite(selMed.id) && <span style={{ color: 'var(--accent-warm)' }}>(Last: {getLastSite(selMed.id)})</span>}</label><div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{sites.map(s => <button key={s} onClick={() => setLog({ ...log, site: s })} style={{ padding: '8px 12px', borderRadius: 'var(--radius-md)', background: log.site === s ? 'var(--accent-primary)' : 'var(--bg-input)', color: log.site === s ? 'var(--bg-deep)' : 'var(--text-primary)', fontSize: 13 }}>{s}</button>)}</div></div>}<div><label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>NOTES</label><textarea value={log.notes} onChange={e => setLog({ ...log, notes: e.target.value })} placeholder="Optional notes..." style={{ width: '100%', padding: 14, background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)', minHeight: 80, resize: 'none' }} /></div><button onClick={logDose} style={{ width: '100%', padding: 14, background: 'var(--accent-success)', borderRadius: 'var(--radius-md)', color: 'var(--bg-deep)', fontWeight: 500, marginTop: 8 }}>Log Dose</button></div></Modal>
+        </div>
+      );
+    };
+
+    const MilestonesTab = ({ data, setData }) => {
+      const [showAdd, setShowAdd] = useState(false);
+      const [newM, setNewM] = useState({ title: '', date: '', type: 'past' });
+      const add = () => { if (!newM.title.trim() || !newM.date) return; setData(p => ({ ...p, milestones: [...p.milestones, { id: generateId(), ...newM }] })); setNewM({ title: '', date: '', type: 'past' }); setShowAdd(false); };
+      const past = data.milestones.filter(m => m.type === 'past' || new Date(m.date) <= new Date());
+      const future = data.milestones.filter(m => m.type === 'future' && new Date(m.date) > new Date());
+      return (
+        <div className="fade-in">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}><h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500 }}>Milestones</h2><button onClick={() => setShowAdd(true)} style={{ padding: '10px 16px', background: 'var(--accent-primary)', borderRadius: 'var(--radius-md)', color: 'var(--bg-deep)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6, fontSize: 14 }}><Icons.Plus /> Add</button></div>
+          {data.milestones.length === 0 ? <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-muted)' }}><div style={{ fontSize: 48, marginBottom: 16 }}>⭐</div><p>No milestones yet</p></div> : <>{future.length > 0 && <div style={{ marginBottom: 32 }}><div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>UPCOMING</div>{future.sort((a, b) => new Date(a.date) - new Date(b.date)).map(m => { const days = getDaysBetween(new Date(), m.date); return <div key={m.id} style={{ background: 'linear-gradient(135deg, var(--bg-card), var(--bg-elevated))', borderRadius: 'var(--radius-lg)', padding: 20, marginBottom: 12, border: '1px solid var(--border-subtle)' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div><h3 style={{ fontSize: 16, fontWeight: 500, marginBottom: 4 }}>{m.title}</h3><p style={{ fontSize: 13, color: 'var(--text-muted)' }}>{formatDateFull(m.date)}</p></div><div style={{ textAlign: 'right' }}><div style={{ fontSize: 32, fontWeight: 300, fontFamily: 'var(--font-display)', color: 'var(--accent-primary)' }}>{days}</div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>days</div></div></div></div>; })}</div>}{past.length > 0 && <div><div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>JOURNEY</div>{past.sort((a, b) => new Date(b.date) - new Date(a.date)).map(m => <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 0', borderBottom: '1px solid var(--border-subtle)' }}><div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--bg-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-warm)' }}><Icons.Star /></div><div style={{ flex: 1 }}><h3 style={{ fontSize: 15, fontWeight: 500, marginBottom: 2 }}>{m.title}</h3><p style={{ fontSize: 12, color: 'var(--text-muted)' }}>{formatDate(m.date)} • Day {getDaysBetween(m.date, new Date())}</p></div></div>)}</div>}</>}
+          <Modal isOpen={showAdd} onClose={() => setShowAdd(false)} title="Add Milestone"><div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}><div><label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>TYPE</label><div style={{ display: 'flex', gap: 8 }}><button onClick={() => setNewM({ ...newM, type: 'past' })} style={{ flex: 1, padding: 12, borderRadius: 'var(--radius-md)', background: newM.type === 'past' ? 'var(--accent-primary)' : 'var(--bg-input)', color: newM.type === 'past' ? 'var(--bg-deep)' : 'var(--text-primary)' }}>Past Event</button><button onClick={() => setNewM({ ...newM, type: 'future' })} style={{ flex: 1, padding: 12, borderRadius: 'var(--radius-md)', background: newM.type === 'future' ? 'var(--accent-primary)' : 'var(--bg-input)', color: newM.type === 'future' ? 'var(--bg-deep)' : 'var(--text-primary)' }}>Future Goal</button></div></div><div><label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>TITLE</label><input type="text" value={newM.title} onChange={e => setNewM({ ...newM, title: e.target.value })} placeholder="e.g., Started HRT" style={{ width: '100%', padding: 14, background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)' }} /></div><div><label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>DATE</label><input type="date" value={newM.date} onChange={e => setNewM({ ...newM, date: e.target.value })} style={{ width: '100%', padding: 14, background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', color: 'var(--text-primary)' }} /></div><button onClick={add} style={{ width: '100%', padding: 14, background: 'var(--accent-primary)', borderRadius: 'var(--radius-md)', color: 'var(--bg-deep)', fontWeight: 500, marginTop: 8 }}>Add Milestone</button></div></Modal>
+        </div>
+      );
+    };
+
+    const SettingsTab = ({ data, setData, onStealth, hasPin, onSetupPin, onRemovePin }) => {
+      const exp = () => { const b = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `chrysalis-${getDateKey(new Date())}.json`; a.click(); };
+      const imp = (e) => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = (ev) => { try { if (confirm('Replace all data?')) { setData(JSON.parse(ev.target.result)); alert('Imported!'); } } catch { alert('Invalid file'); } }; r.readAsText(f); };
+      const st = { photos: data.photos.length, journals: data.journals.length, medLogs: data.medLogs.length, milestones: data.milestones.length };
+      return (
+        <div className="fade-in">
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, marginBottom: 24 }}>Settings</h2>
+          <div style={{ background: 'linear-gradient(135deg, var(--bg-card), #2a2440)', borderRadius: 'var(--radius-lg)', padding: 24, marginBottom: 24, border: '1px solid var(--border-subtle)' }}><div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>YOUR JOURNEY</div><div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}><div><div style={{ fontSize: 28, fontFamily: 'var(--font-display)', fontWeight: 300 }}>{st.photos}</div><div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Photos</div></div><div><div style={{ fontSize: 28, fontFamily: 'var(--font-display)', fontWeight: 300 }}>{st.journals}</div><div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Journal Entries</div></div><div><div style={{ fontSize: 28, fontFamily: 'var(--font-display)', fontWeight: 300 }}>{st.medLogs}</div><div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Doses Logged</div></div><div><div style={{ fontSize: 28, fontFamily: 'var(--font-display)', fontWeight: 300 }}>{st.milestones}</div><div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Milestones</div></div></div></div>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', padding: 20, marginBottom: 16 }}><div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>SECURITY</div><button onClick={() => hasPin ? onRemovePin() : onSetupPin()} style={{ width: '100%', padding: 14, background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}><span style={{ display: 'flex', alignItems: 'center', gap: 12 }}><Icons.Lock />PIN Lock</span><span style={{ color: hasPin ? 'var(--accent-success)' : 'var(--text-muted)', fontSize: 14 }}>{hasPin ? 'Enabled' : 'Disabled'}</span></button><button onClick={onStealth} style={{ width: '100%', padding: 14, background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}><span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>🚂 Stealth Mode</span><span style={{ color: 'var(--text-muted)', fontSize: 14 }}>Test it</span></button></div>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', padding: 20, marginBottom: 16 }}><div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>DATA</div><button onClick={exp} style={{ width: '100%', padding: 14, background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}><Icons.Download />Export Backup</button><label style={{ width: '100%', padding: 14, background: 'var(--bg-input)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}><Icons.Download style={{ transform: 'rotate(180deg)' }} />Import Backup<input type="file" accept=".json" onChange={imp} style={{ display: 'none' }} /></label></div>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', padding: 20 }}><div style={{ fontSize: 12, color: '#e76f51', marginBottom: 16 }}>DANGER ZONE</div><button onClick={() => { if (confirm('Delete ALL data?')) { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(PIN_KEY); window.location.reload(); } }} style={{ width: '100%', padding: 14, background: 'rgba(231,111,81,0.15)', borderRadius: 'var(--radius-md)', color: '#e76f51', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}><Icons.Trash />Delete All Data</button></div>
+          <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', fontSize: 12 }}><div style={{ fontSize: 24, marginBottom: 8 }}>🦋</div><div style={{ fontFamily: 'var(--font-display)', fontSize: 16, marginBottom: 4 }}>Chrysalis</div><div>Your journey, your way</div><div style={{ marginTop: 8 }}>All data stored locally on your device</div></div>
+        </div>
+      );
+    };
+
+    const App = () => {
+      const [data, setData] = useState(loadData);
+      const [tab, setTab] = useState('calendar');
+      const [selDate, setSelDate] = useState(null);
+      const [locked, setLocked] = useState(!!localStorage.getItem(PIN_KEY));
+      const [pinSetup, setPinSetup] = useState(false);
+      const [stealth, setStealth] = useState(false);
+      const [stealthTaps, setStealthTaps] = useState(0);
+      useEffect(() => { saveData(data); }, [data]);
+      const handleStealthTap = () => { setStealthTaps(p => { if (p >= 2) { setStealth(false); return 0; } setTimeout(() => setStealthTaps(0), 1000); return p + 1; }); };
+      if (stealth) return <StealthMode onExit={handleStealthTap} />;
+      if (locked) return <PinLock onUnlock={() => setLocked(false)} isSetup={false} />;
+      if (pinSetup) return <PinLock isSetup onSetupComplete={() => setPinSetup(false)} />;
+      const tabs = [{ id: 'calendar', icon: Icons.Calendar, label: 'Calendar' }, { id: 'photos', icon: Icons.Camera, label: 'Photos' }, { id: 'meds', icon: Icons.Pill, label: 'Meds' }, { id: 'milestones', icon: Icons.Star, label: 'Milestones' }, { id: 'settings', icon: Icons.Settings, label: 'Settings' }];
+      return (
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg-deep)' }}>
+          <header style={{ padding: '16px 20px', paddingTop: 'calc(16px + var(--safe-top))', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 12 }}><span style={{ fontSize: 24 }}>🦋</span><h1 style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 400 }}>Chrysalis</h1></header>
+          <main style={{ flex: 1, overflow: 'auto', padding: 20 }}>
+            {tab === 'calendar' && !selDate && <CalendarView data={data} onDateSelect={setSelDate} />}
+            {tab === 'calendar' && selDate && <DayDetail date={selDate} data={data} setData={setData} onClose={() => setSelDate(null)} />}
+            {tab === 'photos' && <PhotosTab data={data} setData={setData} />}
+            {tab === 'meds' && <MedsTab data={data} setData={setData} />}
+            {tab === 'milestones' && <MilestonesTab data={data} setData={setData} />}
+            {tab === 'settings' && <SettingsTab data={data} setData={setData} onStealth={() => setStealth(true)} hasPin={!!localStorage.getItem(PIN_KEY)} onSetupPin={() => setPinSetup(true)} onRemovePin={() => { if (confirm('Remove PIN?')) localStorage.removeItem(PIN_KEY); }} />}
+          </main>
+          <nav style={{ display: 'flex', borderTop: '1px solid var(--border-subtle)', paddingBottom: 'var(--safe-bottom)', background: 'var(--bg-card)' }}>{tabs.map(t => { const I = t.icon, a = tab === t.id; return <button key={t.id} onClick={() => { setTab(t.id); if (t.id === 'calendar') setSelDate(null); }} style={{ flex: 1, padding: '12px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, color: a ? 'var(--accent-primary)' : 'var(--text-muted)' }}><I /><span style={{ fontSize: 10, fontWeight: 500 }}>{t.label}</span></button>; })}</nav>
+        </div>
+      );
+    };
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
